@@ -1,0 +1,590 @@
+---
+title: "Text Processing / Feature Engeneering"
+author: "Petro Tolochko"
+date: ""
+output:
+  html_document
+---
+
+### Required Packages
+
+```{r, message=FALSE, results='hide'}
+library(tm)
+library(tidyverse)
+library(ggthemes)
+library(ggrepel)
+```
+
+
+# Stop words and other preprocessing effects
+
+```{r}
+getwd()
+setwd("~/Desktop/teaching/CEU_text_analysis_25/meeting_3/") # this is an example, paste your path here
+```
+
+
+Load the data:
+
+```{r}
+
+federalist <- read_csv("federalist.csv")
+
+```
+
+### Basic Pre-processing
+
+```{r}
+
+clean_federalist <- federalist %>%
+  mutate(                           # the mutate() function is part of dplyr package / allows to change stuff within the dataframe easily
+    text   = str_to_lower(text),                # turn all letters to lowercase
+    text   = str_replace_all(text, "\n", " "),  # replace '/n' carriage return symbols
+    text   = str_remove_all(text, "[:punct:]"), # remove all punctuation
+    man    = str_count(text, "\\Wman "),        # Basic regex (more about it later in the course. '\\W' part means at the begging of the word) and count those up
+    by     = str_count(text, "\\Wby "),         # same
+    upon   = str_count(text, "\\Wupon ")        # same
+  ) %>%
+  rowwise() %>%                                 # make future functions work rowwise
+  mutate(
+    length = length(str_split(text, " ")[[1]])  # calculate the length of the text (in words)
+  )
+
+```
+
+
+What are the most used words in the federalist papers?
+
+```{r}
+dtm_federalist <- DocumentTermMatrix(clean_federalist$text,
+                                     control = list(removePunctuation = TRUE,
+                                         stopwords = FALSE))
+
+dtm_federalist <- dtm_federalist %>% as.matrix()
+
+dim(dtm_federalist)
+
+most_frequent <- dtm_federalist %>% colSums()
+
+
+most_frequent_df <- most_frequent %>% as.list() %>% as_tibble() %>%
+  pivot_longer(everything())
+
+most_frequent_df %>% arrange(desc(value))
+
+most_frequent_df %>% arrange(desc(value)) %>% print(n = 20)
+
+
+```
+
+```{r}
+
+most_frequent_df %>%
+  mutate(label = ifelse(value > 1200, name, NA)) %>%
+  ggplot() +
+  geom_point(aes(reorder(name, -value),  value)) +
+  geom_text_repel(aes(reorder(name, -value),  value, label = label),
+                  max.overlaps = 20) +
+  theme_tufte() +
+  ylab("Frequency") +
+  theme(
+    axis.text.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.ticks = element_blank()
+  )
+
+```
+
+Zipf's Law (for many types of data studied in the physical and social sciences, the rank-frequency distribution is an inverse relation):
+
+```{r}
+
+
+most_frequent_df %>%
+  arrange(desc(value)) %>%
+  mutate(rank = 1:nrow(.)) %>%
+  ggplot(aes(rank, value)) +
+  geom_line() +
+  ylab("Frequency") +
+  xlab("Rank") +
+  scale_x_log10() +
+  scale_y_log10() +
+  theme_tufte()
+
+```
+
+
+
+Not amazing.
+
+What if we remove the "basic" stop-words?
+
+```{r}
+dtm_federalist <- DocumentTermMatrix(clean_federalist$text,
+                                     control = list(removePunctuation = TRUE,
+                                         stopwords = TRUE))
+
+dtm_federalist <- dtm_federalist %>% as.matrix()
+
+dim(dtm_federalist)
+
+most_frequent <- dtm_federalist %>% colSums()
+
+most_frequent_df <- most_frequent %>% as.list() %>% as_tibble() %>%
+  pivot_longer(everything())
+
+most_frequent_df %>% arrange(desc(value))
+```
+Already looking a little better!
+
+```{r}
+most_frequent_df %>%
+  mutate(label = ifelse(value > 500, name, NA)) %>%
+  ggplot() +
+  geom_point(aes(reorder(name, -value),  value)) +
+  geom_text_repel(aes(reorder(name, -value),  value, label = label),
+                  max.overlaps = 20) +
+  theme_tufte() +
+  ylab("Frequency") +
+  theme(
+    axis.text.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.ticks = element_blank()
+
+  )
+
+```
+
+
+```{r}
+
+most_frequent_df %>%
+  arrange(desc(value)) %>%
+  mutate(rank = 1:nrow(.)) %>%
+  ggplot(aes(rank, value)) +
+  geom_line() +
+  ylab("Frequency") +
+  xlab("Rank") +
+  scale_x_log10() +
+  scale_y_log10() +
+  theme_tufte()
+```
+
+# TFIDF
+
+$$
+W_{ij} \times log\frac{N}{n_j}
+$$
+
+Super easy, actually. There's already a function implemented in the `tm` package. It's called `weightTfIdf`, and we should pass it to the control param of the `DocumentTermMatrix` function:
+
+```{r}
+dtm_federalist <- DocumentTermMatrix(clean_federalist$text,
+                                     control = list(removePunctuation = TRUE,
+                                         stopwords = TRUE))
+
+dtm_federalist_tfidf <- weightTfIdf(dtm_federalist)
+
+
+dtm_federalist_tfidf <- dtm_federalist_tfidf %>% as.matrix()
+
+dim(dtm_federalist_tfidf)
+
+most_frequent <- dtm_federalist_tfidf %>% colSums()
+
+most_frequent_df <- most_frequent %>% as.list() %>% as_tibble() %>%
+  pivot_longer(everything())
+
+most_frequent_df %>% arrange(desc(value))
+```
+
+Not bad... Let's plot this:
+
+```{r}
+most_frequent_df %>%
+  mutate(label = ifelse(value > .107, name, NA)) %>%
+  ggplot() +
+  geom_point(aes(reorder(name, -value),  value)) +
+  geom_text_repel(aes(reorder(name, -value),  value, label = label),
+                  max.overlaps = 20) +
+  theme_tufte() +
+  ylab("tf-idf") +
+  theme(
+    axis.text.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.ticks = element_blank()
+
+  )
+
+```
+
+
+# Log Odds
+
+First, let's see if `tfidf` can be a good discriminant function between `Hamilton` and `Madison`?
+
+```{r}
+
+dtm_federalist <- DocumentTermMatrix(clean_federalist$text,
+                                     control = list(removePunctuation = TRUE,
+                                         stopwords = TRUE))
+
+dtm_federalist_tfidf <- weightTfIdf(dtm_federalist)
+
+hamilton_ids <- which(clean_federalist$author == "HAMILTON")
+madison_ids <- which(clean_federalist$author == "MADISON")
+
+most_frequent_hamilton <- dtm_federalist_tfidf[hamilton_ids, ] %>%
+  as.matrix() %>% colSums()
+most_frequent_madison <- dtm_federalist_tfidf[madison_ids, ] %>%
+  as.matrix() %>% colSums()
+
+
+
+most_frequent_df_hamilton <- most_frequent_hamilton %>%
+  as.list() %>%
+  as_tibble() %>%
+  pivot_longer(everything()) %>% 
+  mutate(author = "HAMILTON")
+
+
+most_frequent_df_madison <- most_frequent_madison %>%
+  as.list() %>%
+  as_tibble() %>%
+  pivot_longer(everything()) %>% 
+  mutate(author = "MADISON")
+
+most_frequent_df <- bind_rows(most_frequent_df_hamilton,
+                              most_frequent_df_madison)
+
+hamilton_plot <- most_frequent_df %>%
+  filter(author == "HAMILTON") %>%
+  top_n(20, value) %>%
+  ggplot() +
+  geom_bar(aes(reorder(name, value), value),
+           stat = "identity",
+           fill = "steelblue") +
+  coord_flip() +
+  ylab("ti-idf") +
+  theme_tufte() +
+  theme(axis.title.y = element_blank())
+
+madison_plot <- most_frequent_df %>%
+  filter(author == "MADISON") %>%
+  top_n(20, value) %>%
+  ggplot() +
+  geom_bar(aes(reorder(name, value), value),
+           stat = "identity",
+           fill = "indianred4") +
+  coord_flip() +
+  ylab("ti-idf") +
+  theme_tufte() +
+  theme(axis.title.y = element_blank())
+
+
+cowplot::plot_grid(hamilton_plot, madison_plot,
+                   ncol = 2)
+
+
+```
+
+Let's try to calculate log odds.
+
+$$
+logO^i_w = log\frac{f^i_w}{1 - f^i_w}
+$$
+
+```{r}
+
+# Original DTM
+dtm_federalist <- DocumentTermMatrix(clean_federalist$text,
+  control = list(removePunctuation = TRUE,
+                 stopwords = TRUE)
+)
+
+# Identify HAMILTON and MADISON docs
+hamilton_ids <- which(clean_federalist$author == "HAMILTON")
+madison_ids  <- which(clean_federalist$author == "MADISON")
+
+# Convert the entire DTM to a matrix for easy column sums
+dtm_mat <- as.matrix(dtm_federalist)
+word_counts <- colSums(dtm_mat)
+
+# 1) Filter out extremely rare words
+#    e.g., words that appear fewer than 5 times overall
+rare_threshold <- 5
+keep_words <- names(word_counts)[word_counts >= rare_threshold]
+
+dtm_federalist <- dtm_federalist[ , keep_words]
+dtm_mat        <- dtm_mat[ , keep_words]  # re-assign the filtered matrix
+
+# Recompute word counts after filtering
+word_counts <- colSums(dtm_mat)
+
+
+dtm_federalist  <- dtm_federalist  %>% as.matrix()
+
+dtm_hamilton <- dtm_federalist[hamilton_ids, ] %>%
+  colSums()
+
+dtm_madison <- dtm_federalist[madison_ids, ] %>%
+  colSums()
+
+# Laplace smoothing with +1
+freq_ham <- (dtm_hamilton + 1) / sum(dtm_hamilton + 1)
+freq_mad <- (dtm_madison  + 1) / sum(dtm_madison  + 1)
+
+# Log-odds function
+log_odds <- function(p) log(p / (1 - p))
+
+log_odds_ham <- log_odds(freq_ham)
+log_odds_mad <- log_odds(freq_mad)
+
+log_odds_ratio <- log_odds_ham - log_odds_mad  # difference in log-odds
+
+log_odds_ratio <- enframe(log_odds_ratio, name = "word", value = "log_odds_diff")
+
+# Bring in overall frequency of each word
+general_frequency <- enframe(word_counts, name = "word", value = "freq")
+
+log_odds_ratio <- log_odds_ratio %>%
+  left_join(general_frequency, by = "word")
+
+
+```
+
+Now, log odds ratio:
+
+$$
+log\frac{O^i_w}{O^j_w} = log\frac{f^i_w}{1 - f^i_w}/\frac{f^j_w}{1 - f^j_w} = log\frac{f^i_w}{1 - f^i_w} - log\frac{f^j_w}{1 - f^j_w}
+$$
+```{r}
+log_odds_ratio <- log_odds_ham - log_odds_mad
+
+
+log_odds_ratio <- log_odds_ratio %>%
+  as.list() %>%
+  as_tibble() %>%
+  pivot_longer(everything())
+
+### Add word frequency ###
+
+general_frequency <- dtm_federalist %>% as.matrix() %>% colSums() %>%
+  as.list() %>%
+  as_tibble() %>%
+  pivot_longer(everything()) %>%
+  mutate(freq = value) %>%
+  select(-value)
+
+log_odds_ratio <- log_odds_ratio %>%
+  left_join(general_frequency)
+
+
+log_odds_ratio %>%
+  mutate(label = ifelse(value > 2 | value < -2, name, NA)) %>%
+  ggplot() +
+  geom_point(aes(freq, value, color = value)) +
+  geom_text_repel(aes(freq, value, label = label),
+                  max.overlaps = 50) +
+  ylab("log odds ratio") +
+  theme_tufte() +
+  theme(legend.position = "none")
+
+
+log_odds_ratio %>%
+  mutate(label = ifelse(value > 2 | value < -2, name, NA)) %>%
+  ggplot() +
+  geom_point(aes(freq, value, color = value)) +
+  geom_text_repel(aes(freq, value, label = label),
+                  max.overlaps = 50) +
+  ylab("log odds ratio") +
+  scale_x_log10() +  # often helpful to log-scale the frequency axis
+  theme_tufte() +
+  theme(legend.position = "none")
+
+
+hamilton_plot <- log_odds_ratio %>%
+  top_n(20, value) %>%
+  ggplot() +
+  geom_bar(aes(reorder(name, value), value),
+           stat = "identity",
+           fill = "steelblue") +
+  coord_flip() +
+  ylab("log odds ratio") +
+  theme_tufte() +
+  theme(axis.title.y = element_blank())
+
+madison_plot <- log_odds_ratio %>%
+  top_n(20, -value) %>%
+  ggplot() +
+  geom_bar(aes(reorder(name, -value), value),
+           stat = "identity",
+           fill = "indianred4") +
+  coord_flip() +
+  ylab("log odds ratio") +
+  theme_tufte() +
+  theme(axis.title.y = element_blank())
+
+
+cowplot::plot_grid(madison_plot, hamilton_plot,
+                   ncol = 2)
+
+```
+
+
+
+# Fightin' Words
+
+There are many problems with this method. Please refer to **Fightin’ Words: Lexical Feature Selection and Evaluation for Identifying the Content of Political Conflict** by **Monroe**, **Colaresi** & **Quinn** (2009) for a very cool overview and improvement on the method.
+
+
+## Mathematical Formulation
+
+Let:
+- \( c_{1,w} \) be the count of word \( w \) in group 1 (e.g., Hamilton),
+- \( c_{2,w} \) be the count of word \( w \) in group 2 (e.g., Madison),
+- \( \alpha \) be a small prior hyperparameter (e.g., 0.01),
+- \( V \) be the total number of distinct words (vocabulary size).
+
+### 1. Posterior Proportions
+
+We assume a Dirichlet prior on the probability of each word within each group. The posterior estimate of word \( w \) in group \( g \) (\(g \in \{1,2\}\)) is:
+
+\[
+\hat{p}_{g,w} \;=\; \frac{c_{g,w} + \alpha}{\sum_{w} c_{g,w} + \alpha \, V}.
+\]
+
+### 2. Difference in Log-Odds
+
+Convert each posterior proportion to **log-odds**:
+
+\[
+\text{log\_odds}_{g,w} \;=\; \log\!\Bigl(\frac{\hat{p}_{g,w}}{1 - \hat{p}_{g,w}} \Bigr),
+\]
+
+and then compute the difference:
+
+\[
+\Delta_w \;=\; \text{log\_odds}_{1,w} \;-\; \text{log\_odds}_{2,w}.
+\]
+
+### 3. Approximate Variance and *z*‐score
+
+An approximate variance for \(\Delta_w\) under the Dirichlet–Multinomial model is given by:
+
+\[
+\mathrm{Var}(\Delta_w) 
+\;\approx\;
+    \frac{1}{c_{1,w} + \alpha} 
+    \;+\;
+    \frac{1}{\Bigl(\sum_{w} c_{1,w} + \alpha \, V\Bigr) - \bigl(c_{1,w} + \alpha\bigr)}
+    \;+\;
+    \frac{1}{c_{2,w} + \alpha}
+    \;+\;
+    \frac{1}{\Bigl(\sum_{w} c_{2,w} + \alpha \, V\Bigr) - \bigl(c_{2,w} + \alpha\bigr)}.
+\]
+
+Thus, we can define a *z*‐score for the difference:
+
+\[
+z_w 
+\;=\; 
+\frac{\Delta_w}{\sqrt{\mathrm{Var}(\Delta_w)}}.
+\]
+
+Words with large positive \(\Delta_w\) (and large \(|z_w|\)) are highly indicative of group 1; words with large negative \(\Delta_w\) are more characteristic of group 2.
+
+---
+
+
+
+
+```{r}
+
+
+dtm_hamilton <- dtm_federalist[hamilton_ids, ] %>%
+  colSums()
+
+dtm_madison <- dtm_federalist[madison_ids, ] %>%
+  colSums()
+
+# Laplace smoothing with +1
+freq_ham <- (dtm_hamilton + 1) / sum(dtm_hamilton + 1)
+freq_mad <- (dtm_madison  + 1) / sum(dtm_madison  + 1)
+
+# Log-odds function
+log_odds <- function(p) log(p / (1 - p))
+
+log_odds_ham <- log_odds(freq_ham)
+log_odds_mad <- log_odds(freq_mad)
+
+log_odds_ratio <- log_odds_ham - log_odds_mad  # difference in log-odds
+
+log_odds_ratio <- enframe(log_odds_ratio, name = "word", value = "log_odds_diff")
+
+# Bring in overall frequency of each word
+general_frequency <- enframe(word_counts, name = "word", value = "freq")
+
+
+
+
+fightin_words_log_odds <- function(c1, c2, alpha = 0.01) {
+  # c1, c2: named integer vectors of word counts for group 1 and group 2
+  # alpha : Dirichlet prior hyperparameter
+  
+  # Make sure c1, c2 have same names (same vocab)
+  stopifnot(all(names(c1) == names(c2)))
+  
+  V <- length(c1)
+  
+  n1 <- sum(c1)
+  n2 <- sum(c2)
+  
+  # Posterior proportions for group 1 and group 2
+  p1 <- (c1 + alpha) / (n1 + alpha * V)
+  p2 <- (c2 + alpha) / (n2 + alpha * V)
+  
+  # log-odds
+  log_odds_1 <- log(p1 / (1 - p1))
+  log_odds_2 <- log(p2 / (1 - p2))
+  
+  d <- log_odds_1 - log_odds_2  # difference
+  
+  # Approx variance
+  var_d <- 1 / (c1 + alpha) + 1 / (n1 - c1 + alpha * (V - 1)) +
+           1 / (c2 + alpha) + 1 / (n2 - c2 + alpha * (V - 1))
+  
+  z <- d / sqrt(var_d)  # z-score
+  
+  tibble(
+    word          = names(c1),
+    log_odds_diff = d,
+    z             = z
+  )
+}
+
+# Example usage:
+alpha_val <- 0.01  # small prior
+res_fightin <- fightin_words_log_odds(
+  c1 = dtm_hamilton,
+  c2 = dtm_madison,
+  alpha = alpha_val
+)
+
+# Merge in overall frequency
+res_fightin <- res_fightin %>%
+  left_join(general_frequency, by = "word")
+
+# Now we can highlight words with large absolute z-scores or large log-odds
+res_fightin %>%
+  mutate(label = ifelse(abs(z) > 3, word, NA)) %>%
+  ggplot(aes(freq, log_odds_diff, color = z)) +
+  geom_point() +
+  geom_text_repel(aes(label = label), max.overlaps = 50) +
+  scale_x_log10() +
+  ylab("Fightin' Words Difference in Log-Odds") +
+  ggtitle(paste("Dirichlet prior =", alpha_val)) +
+  theme_tufte() +
+  theme(legend.position = "right")
+
+```
