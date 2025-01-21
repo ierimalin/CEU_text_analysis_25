@@ -1,0 +1,409 @@
+---
+title: "Federalist Multinomial / Vectors"
+author: "Petro Tolochko"
+date: ""
+output:
+  html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Preparation
+
+### Required Packages
+
+We first need to install the packages required for further analysis.
+
+```{r, echo=FALSE}
+r = getOption("repos")
+r["CRAN"] = "http://cran.us.r-project.org"
+options(repos = r)
+```
+
+```{r, message=FALSE, results='hide'}
+
+# install.packages("tm")                            # probably already installed
+# install.packages("tidyverse")                     # probably already installed
+# install.packages("ggthemes") # for nicer graphics # new
+# install.packages("ggrepel")
+# install.packages("cowplot")
+# install.packages("SnowballC")
+```
+
+Note: you only need to install the packages once.
+
+We then need load the packages in our environment:
+
+```{r, message=FALSE, results='hide'}
+library(tm)
+library(tidyverse)
+library(openNLP)
+library(SnowballC)
+library(ggthemes)
+library(ggrepel)
+```
+
+Check if your working directory is the correct one:
+
+```{r}
+getwd()
+setwd("~/Desktop/Teaching/CEU_text_as_data/meeting_3/") # this is an example, paste your path here
+```
+
+
+Ok, now read in the file `federalist.csv` and inspect:
+
+```{r}
+federalist <- read_csv("federalist.csv")
+
+federalist
+
+names(federalist)
+```
+
+Let's see how a text looks like:
+
+```{r}
+federalist$text[1] # explain this!
+```
+
+Amazing, let's continue.
+
+
+### Basic Pre-processing
+
+```{r}
+
+clean_federalist <- federalist %>%
+  mutate(                           # the mutate() function is part of dplyr package / allows to change stuff within the dataframe easily
+    text   = str_to_lower(text),                # turn all letters to lowercase
+    text   = str_replace_all(text, "\n", " "),  # replace '/n' carriage return symbols
+    text   = str_remove_all(text, "[:punct:]"), # remove all punctuation
+    man    = str_count(text, "\\Wman "),        # Basic regex (more about it later in the course. '\\W' part means at the begging of the word) and count those up
+    by     = str_count(text, "\\Wby "),         # same
+    upon   = str_count(text, "\\Wupon ")        # same
+  ) %>%
+  rowwise() %>%                                 # make future functions work rowwise
+  mutate(
+    length = length(str_split(text, " ")[[1]])  # calculate the length of the text (in words)
+  )
+
+```
+
+How does it look like now?
+
+```{r}
+clean_federalist$text[1]
+```
+
+Nice! Did the word counting work?
+
+```{r}
+clean_federalist %>%
+  select(man, by, upon)
+```
+
+Looks like it!
+Now we're ready for some real analysis.
+
+# Federalist Analysis [Simplified from (Grimmer at al., 2022)]
+
+### Multinomial Model!
+
+We'll do something else later, I promise.
+
+
+Let's calculate the word rates for Hamilton, Madison, and Jay. Call them $\mu_{h}$, $\mu_{m}$, and $\mu_{j}$:
+
+```{r}
+
+mu_madison <- clean_federalist %>% 
+  filter(author == "MADISON") %>%
+  select(man, by, upon) %>%
+  colSums()
+
+mu_hamilton <- clean_federalist %>% 
+  filter(author == "HAMILTON") %>%
+  select(man, by, upon) %>%
+  colSums()
+
+mu_jay <- clean_federalist %>% 
+  filter(author == "JAY") %>%
+  select(man, by, upon) %>%
+  colSums()
+
+```
+
+Check them:
+
+```{r}
+mu_madison; mu_hamilton; mu_jay
+```
+
+Now, calculate their probabilities and call them $\hat{\mu}_{h}$, $\hat{\mu}_{m}$, and $\hat{\mu}_{j}$:
+
+```{r}
+mu_hat_hamilton <- mu_hamilton / sum(mu_hamilton)
+mu_hat_madison <- mu_madison / sum(mu_madison)
+mu_hat_jay <- mu_jay / sum(mu_jay)
+```
+
+These are their word models! We're almost there...
+Now, the Federalist paper ***#49*** is one of the disputed ones. First, let's see it:
+
+```{r}
+clean_federalist$text[49]
+clean_federalist[49, ]
+```
+
+
+
+```{r}
+### Disputed ###
+mu_disputed <- clean_federalist[49, ] %>%
+  select(man, by, upon)
+
+mu_disputed
+```
+
+Calculating probabilities...
+There's a built-in `dmultinom` function!
+You can check what it's doing by typing `?dmultinom` in your console.
+
+```{r}
+
+p_disputed_hamilton <- dmultinom(mu_disputed,
+                                 prob = mu_hat_hamilton)
+p_disputed_madison  <- dmultinom(mu_disputed,
+                                 prob = mu_hat_madison)
+p_disputed_jay      <- dmultinom(mu_disputed,
+                                 prob = mu_hat_jay)
+
+```
+
+And done!
+
+```{r}
+p_disputed_hamilton; p_disputed_madison; p_disputed_jay
+```
+
+As ***Individual Work***: try all the words (not just the ones we used here) and see if you get better or worse results. Play around with *Laplace smoothing* -- i.e., adding a small number to the model to eliminate 0 probability words (e.g., add `1` to all counts before calculating probability).
+
+
+# Vector Space Model
+
+Let's look at the Federalist papers as vectors. Just the selected words for now (so, in the `man`, `by`, `upon` vector space).
+We already have them as vector representations:
+
+
+
+```{r}
+mu_madison; mu_hamilton; mu_jay
+```
+
+
+We can try to visualize them. A bit difficult to do 3D (although possible), so let's try to visualize them in 2D.
+
+First, we need to play around with data a bit, for visualization.
+
+```{r}
+
+vector_visualizations <- rbind(mu_madison, mu_hamilton, mu_jay, mu_disputed)
+
+vector_visualizations$author = c("Madison", "Hamilton", "Jay", "Disputed")
+
+
+```
+
+Lets remove the `man` dimension for the visualization:
+
+```{r}
+vector_visualizations_no_man <- vector_visualizations %>%
+  select(-man)
+
+vector_visualizations_no_man
+```
+
+```{r}
+
+vector_visualizations_no_man %>%
+  ggplot() +
+  geom_segment(aes(x = 0, y = 0, xend = by, yend = upon, color = factor(author)),
+               arrow = arrow(length = unit(0.2,"cm")),
+               size = 1) +
+  theme_tufte() +
+  theme(
+    # legend.position = "none",
+    
+    axis.title.x = element_text(size = 18),
+    axis.title.y = element_text(size = 18),
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18)
+  ) +
+  xlab("By") +
+  ylab("Upon") +
+  labs(color = 'Author')
+
+
+```
+
+Ok, not very helpful, let's try removing `by` dimension...
+
+```{r}
+vector_visualizations_no_by <- vector_visualizations %>%
+  select(-by)
+
+vector_visualizations_no_by %>%
+  ggplot() +
+  geom_segment(aes(x = 0, y = 0, xend = man, yend = upon, color = factor(author)),
+               arrow = arrow(length = unit(0.2,"cm")),
+               size = 1) +
+  theme_tufte() +
+  theme(
+    # legend.position = "none",
+    
+    axis.title.x = element_text(size = 18),
+    axis.title.y = element_text(size = 18),
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18)
+  ) +
+  xlab("Man") +
+  ylab("Upon") +
+  labs(color = 'Author')
+```
+
+
+Let's increase the vector magnitude for the `Disputed` vector. And maybe the `Jay` vector. Just to see it better:
+
+```{r}
+vector_visualizations_no_by[4, 1:2] <- vector_visualizations_no_by[4, 1:2] * 100
+vector_visualizations_no_by[3, 1:2] <- vector_visualizations_no_by[3, 1:2] * 100
+vector_visualizations_no_by %>%
+  ggplot() +
+  geom_segment(aes(x = 0, y = 0, xend = man, yend = upon, color = factor(author)),
+               arrow = arrow(length = unit(0.2,"cm")),
+               size = 1) +
+  theme_tufte() +
+  theme(
+    # legend.position = "none",
+    
+    axis.title.x = element_text(size = 18),
+    axis.title.y = element_text(size = 18),
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18)
+  ) +
+  xlab("Man") +
+  ylab("Upon") +
+  labs(color = 'Author')
+```
+
+So, just visually (on the dimensions `upon` and `man`), the `Disputed` paper has the smallest angle compared to `Madison`.
+
+## Cosine similarity
+
+Cosine similarity is ***!!! SURPRISE SURPRISE !!!*** a **similarity** measure between two vectors.
+
+It is defined as:
+
+$$
+cos(\theta) = \frac{\mathbf{A} \cdot \mathbf{B}}{||\mathbf{A}|| ||\mathbf{B}||}
+$$
+
+Where $\mathbf{A} \cdot \mathbf{B} = A_1 \times B_1 + A_2 \times B_2 ...$ is the dot product of vectors, `%*%` operator in `r`. And $||A||$ is the **magnitude** (or, **Eucledian Norm**) of the vector -- $\sqrt{\Sigma^b_{i = 1}A^2_i}$.
+
+
+
+$$
+cos(\theta) = \frac{\mathbf{A} \cdot \mathbf{B}}{||\mathbf{A}|| ||\mathbf{B}||} = \frac{\Sigma^b_{i=1}A_iB_i}{\sqrt{\Sigma^b_{i = 1}A^2_i}\sqrt{\Sigma^b_{i = 1}B^2_i}}
+$$
+
+We can write the function:
+
+```{r}
+cosine_sim <- function(A, B) {
+  numerator   <- A %*% B
+  denominator <- sqrt(sum(A^2)) * sqrt(sum(B^2))
+  
+  similiarity <- numerator / denominator
+  return(similiarity)
+}
+```
+
+Let's get the data for analysis:
+
+```{r}
+vectors <- vector_visualizations[, 1:3] %>% as.matrix()
+```
+
+And now, let's calculate the similarity between them.
+
+```{r}
+similarity_matrix <- matrix(
+  nrow = 4, ncol = 4
+)
+
+for (i in 1:nrow(similarity_matrix)) {
+  for (j in 1:ncol(similarity_matrix)) {
+    similarity_matrix[i, j] = cosine_sim(vectors[i, ], vectors[j, ])
+  }
+}
+
+rownames(similarity_matrix) <- vector_visualizations$author
+colnames(similarity_matrix) <- vector_visualizations$author
+
+similarity_matrix
+
+```
+
+We don't have tons of data, so everything is very similar to everything else. But, it still provides evidence to the hypothesis, that the `Disputed` paper was written by `Madison`. Note that the highest similarity is with `Jay`, but 1) it was never hypothesized, and 2) the vector for `Jay` is very sparse, so difficult to make any meaningful measurements. 
+
+
+Once again, for ***NO ADDITIONAL POINTS*** calculate the similarity between `Madison`, `Hamilton` and all other disputed papers (one by one). We can check which ones are disputed:
+
+```{r}
+clean_federalist %>%
+  filter(author == "HAMILTON OR MADISON")
+```
+
+
+
+
+# Bonus!
+
+3D vector visualization:
+
+```{r}
+
+# install.packages("rgl")
+# library(rgl)
+# 
+# 
+# 
+# # Define your vectors
+# vector_madison <- c(17, 474, 7)
+# vector_hamilton <- c(102, 859, 374)
+# vector_jay <- c(0, 82, 1)
+# 
+# # Create a 3D plot
+# open3d()
+# plot3d(0, 0, 0, type = "n", xlim = c(-3, 3), ylim = c(-3, 3), zlim = c(-3, 3), main = "3-Word Space")
+# 
+# 
+# 
+# # Add vectors to the plot
+# arrow3d(p0 = c(0, 0, 0), p1 = c(vector_madison[1], vector_madison[2], vector_madison[3]), col = "indianred", length = 0.1)
+# arrow3d(p0 = c(0, 0, 0), p1 = c(vector_hamilton[1], vector_hamilton[2], vector_hamilton[3]), col = "steelblue", length = 0.1)
+# arrow3d(p0 = c(0, 0, 0), p1 = c(vector_jay[1], vector_jay[2], vector_jay[3]), col = "gold", length = 0.1)
+# 
+# 
+# # Add labels to the vectors
+# text3d(vector_madison[1], vector_madison[2], vector_madison[3], texts = "Madison", adj = 0)
+# text3d(vector_hamilton[1], vector_hamilton[2], vector2[3], vector_hamilton = "Hamilton", adj = 0)
+# text3d(vector_jay[1], vector_jay[2], vector_jay[3], texts = "Jay", adj = 0)
+
+
+```
+
