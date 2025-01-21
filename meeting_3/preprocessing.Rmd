@@ -437,62 +437,74 @@ cowplot::plot_grid(madison_plot, hamilton_plot,
 
 There are many problems with this method. Please refer to **Fightin’ Words: Lexical Feature Selection and Evaluation for Identifying the Content of Political Conflict** by **Monroe**, **Colaresi** & **Quinn** (2009) for a very cool overview and improvement on the method.
 
+This approach refines the basic log-odds comparison by introducing a Bayesian perspective with a Dirichlet prior, allowing for both posterior estimates of word usage and *z*‐scores of the difference. This helps identify the **most distinctly used** words between two groups (e.g., Hamilton vs. Madison).
 
 ## Mathematical Formulation
 
 Let:
-- \( c_{1,w} \) be the count of word \( w \) in group 1 (e.g., Hamilton),
-- \( c_{2,w} \) be the count of word \( w \) in group 2 (e.g., Madison),
-- \( \alpha \) be a small prior hyperparameter (e.g., 0.01),
-- \( V \) be the total number of distinct words (vocabulary size).
+
+- \( c_{1,w} \) be the count of word \( w \) in group 1 (e.g., Hamilton),  
+- \( c_{2,w} \) be the count of word \( w \) in group 2 (e.g., Madison),  
+- \( \alpha \) be a small prior hyperparameter (e.g., 0.01),  
+- \( V \) be the total number of distinct words (the vocabulary size).
 
 ### 1. Posterior Proportions
 
-We assume a Dirichlet prior on the probability of each word within each group. The posterior estimate of word \( w \) in group \( g \) (\(g \in \{1,2\}\)) is:
+We assume a Dirichlet prior on the probability of each word within each group. The posterior estimate of word \( w \) in group \( g \) (\( g \in \{1,2\} \)) is:
 
-\[
-\hat{p}_{g,w} \;=\; \frac{c_{g,w} + \alpha}{\sum_{w} c_{g,w} + \alpha \, V}.
-\]
+$$
+\hat{p}_{g,w} 
+= 
+\frac{c_{g,w} + \alpha}{\sum_{w} c_{g,w} + \alpha \, V}.
+$$
 
 ### 2. Difference in Log-Odds
 
 Convert each posterior proportion to **log-odds**:
 
-\[
-\text{log\_odds}_{g,w} \;=\; \log\!\Bigl(\frac{\hat{p}_{g,w}}{1 - \hat{p}_{g,w}} \Bigr),
-\]
+$$
+\text{log\_odds}_{g,w} 
+= 
+\ln\!\Bigl(\frac{\hat{p}_{g,w}}{1 - \hat{p}_{g,w}} \Bigr),
+$$
 
 and then compute the difference:
 
-\[
-\Delta_w \;=\; \text{log\_odds}_{1,w} \;-\; \text{log\_odds}_{2,w}.
-\]
+$$
+\Delta_w 
+= 
+\text{log\_odds}_{1,w} 
+\;-\; 
+\text{log\_odds}_{2,w}.
+$$
 
 ### 3. Approximate Variance and *z*‐score
 
-An approximate variance for \(\Delta_w\) under the Dirichlet–Multinomial model is given by:
+An approximate variance for \( \Delta_w \) under the Dirichlet–Multinomial model is given by:
 
-\[
+$$
 \mathrm{Var}(\Delta_w) 
-\;\approx\;
+\approx
     \frac{1}{c_{1,w} + \alpha} 
-    \;+\;
+    +
     \frac{1}{\Bigl(\sum_{w} c_{1,w} + \alpha \, V\Bigr) - \bigl(c_{1,w} + \alpha\bigr)}
-    \;+\;
+    +
     \frac{1}{c_{2,w} + \alpha}
-    \;+\;
+    +
     \frac{1}{\Bigl(\sum_{w} c_{2,w} + \alpha \, V\Bigr) - \bigl(c_{2,w} + \alpha\bigr)}.
-\]
+$$
 
 Thus, we can define a *z*‐score for the difference:
 
-\[
+$$
 z_w 
-\;=\; 
+= 
 \frac{\Delta_w}{\sqrt{\mathrm{Var}(\Delta_w)}}.
-\]
+$$
 
-Words with large positive \(\Delta_w\) (and large \(|z_w|\)) are highly indicative of group 1; words with large negative \(\Delta_w\) are more characteristic of group 2.
+Words with large positive \( \Delta_w \) (and large \(|z_w|\)) are highly indicative of group 1; words with large negative \( \Delta_w \) are more characteristic of group 2.
+
+
 
 ---
 

@@ -50,7 +50,7 @@ Check if your working directory is the correct one:
 
 ```{r}
 getwd()
-setwd("~/Desktop/Teaching/CEU_text_as_data/meeting_3/") # this is an example, paste your path here
+setwd("~/Desktop/Teaching/CEU_text_analysis_25/meeting_3/") # this is an example, paste your path here
 ```
 
 
