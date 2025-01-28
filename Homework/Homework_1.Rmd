@@ -69,11 +69,10 @@ Which author has the largest likelihood?
 
 <li> Compute the log odds for each bigram.
 
-\[
-\log O_b^i
-\;=\;
-\log\!\biggl(\frac{f_b^i}{1 - f_b^i}\biggr),
-\]
+
+$$
+\log O_b^i = \log(\frac{f_b^i}{1 - f_b^i})
+$$
 
 where $f_b^i$ is the relative frequency of bigram $b$ in author $i$.
 
