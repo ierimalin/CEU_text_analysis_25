@@ -77,10 +77,14 @@ Amazing, let's continue.
 
 ```{r}
 
+
+
 clean_federalist <- federalist %>%
   mutate(                           # the mutate() function is part of dplyr package / allows to change stuff within the dataframe easily
     text   = str_to_lower(text),                # turn all letters to lowercase
-    text   = str_replace_all(text, "\n", " "),  # replace '/n' carriage return symbols
+    text   = str_replace_all(text, "\n", " "),  # replace '\n' carriage return symbols
+    # text = str_replace_all(text, "  ", " "),
+    text = trimws(text),                        # remove leading and trailing whitespaces
     text   = str_remove_all(text, "[:punct:]"), # remove all punctuation
     man    = str_count(text, "\\Wman "),        # Basic regex (more about it later in the course. '\\W' part means at the begging of the word) and count those up
     by     = str_count(text, "\\Wby "),         # same
@@ -213,7 +217,7 @@ First, we need to play around with data a bit, for visualization.
 
 vector_visualizations <- rbind(mu_madison, mu_hamilton, mu_jay, mu_disputed)
 
-vector_visualizations$author = c("Madison", "Hamilton", "Jay", "Disputed")
+vector_visualizations$author <- c("Madison", "Hamilton", "Jay", "Disputed")
 
 
 ```
@@ -279,8 +283,10 @@ vector_visualizations_no_by %>%
 Let's increase the vector magnitude for the `Disputed` vector. And maybe the `Jay` vector. Just to see it better:
 
 ```{r}
+
 vector_visualizations_no_by[4, 1:2] <- vector_visualizations_no_by[4, 1:2] * 100
 vector_visualizations_no_by[3, 1:2] <- vector_visualizations_no_by[3, 1:2] * 100
+vector_visualizations_no_by[1, 1:2] <- vector_visualizations_no_by[1, 1:2] * 10
 vector_visualizations_no_by %>%
   ggplot() +
   geom_segment(aes(x = 0, y = 0, xend = man, yend = upon, color = factor(author)),

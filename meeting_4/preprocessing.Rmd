@@ -72,7 +72,7 @@ most_frequent_df <- most_frequent %>% as.list() %>% as_tibble() %>%
 
 most_frequent_df %>% arrange(desc(value))
 
-most_frequent_df %>% arrange(desc(value)) %>% print(n = 20)
+most_frequent_df %>% arrange(desc(value)) %>% print(n = 50)
 
 
 ```
@@ -169,6 +169,119 @@ most_frequent_df %>%
   scale_y_log10() +
   theme_tufte()
 ```
+
+
+# What about stemming?
+
+```{r}
+library(SnowballC)
+
+# Example: Apply stemming via the 'stemDocument' function in a corpus/dtm workflow
+
+stemmed_corpus <- VCorpus(VectorSource(clean_federalist$text)) %>%
+  tm_map(stemDocument)
+
+dtm_stemmed <- DocumentTermMatrix(stemmed_corpus,
+  control = list(stopwords = TRUE,
+                 removePunctuation = TRUE)
+)
+
+dtm_stemmed <- as.matrix(dtm_stemmed)
+
+
+dim(dtm_stemmed)
+dim(dtm_federalist)
+
+
+dtm_stemmed <- dtm_stemmed %>% as.matrix()
+
+
+most_frequent_stemmed <- dtm_stemmed %>% colSums()
+
+
+
+most_frequent_df_stemmed <- most_frequent_stemmed %>% as.list() %>% as_tibble() %>%
+  pivot_longer(everything())
+
+most_frequent_df_stemmed %>% arrange(desc(value))
+
+
+
+most_frequent_df_stemmed %>%
+  mutate(label = ifelse(value > 400, name, NA)) %>%
+  ggplot() +
+  geom_point(aes(reorder(name, -value),  value)) +
+  geom_text_repel(aes(reorder(name, -value),  value, label = label),
+                  max.overlaps = 20) +
+  theme_tufte() +
+  ylab("Frequency") +
+  theme(
+    axis.text.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.ticks = element_blank()
+
+  )
+
+```
+
+
+# Bigrams (Tidytext Implementation)
+
+For more information on the Tidytext approach, please refer to the [Tidytext book](https://www.tidytextmining.com/).
+
+```{r}
+
+
+library(tidytext)
+
+
+federalist_bigrams <- clean_federalist %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  count(bigram, sort = TRUE)
+
+
+federalist_bigrams %>% 
+  group_by() %>%
+  slice_max(n, n = 20) %>%
+  ggplot(aes(x = reorder(bigram, n), y = n)) +
+  geom_col() +
+  coord_flip() +
+  labs(x = NULL, y = "Bigram frequency") +
+  theme_tufte()
+
+
+
+# remove stopwords
+
+data(stop_words)
+
+federalist_bigrams_separated <- federalist_bigrams %>%
+  separate(bigram, into = c("word1", "word2"), sep = " ")
+
+
+federalist_bigrams_filtered <- federalist_bigrams_separated %>%
+  filter(!word1 %in% stop_words$word,
+         !word2 %in% stop_words$word)
+
+federalist_bigrams_counts <- federalist_bigrams_filtered %>%
+  unite("bigram", word1, word2, sep = " ")
+
+# Now let's plot the top bigrams
+federalist_bigrams_counts %>% 
+  slice_max(n, n = 20) %>%
+  ggplot(aes(x = reorder(bigram, n), y = n)) +
+  geom_col() +
+  coord_flip() +
+  labs(x = NULL, y = "Bigram frequency") +
+  theme_tufte()
+
+
+# Per Author bigrams
+
+```
+
+
+
 
 # TFIDF
 
@@ -463,7 +576,7 @@ $$
 Convert each posterior proportion to **log-odds**:
 
 $$
-\text{log\_odds}_{g,w} 
+\text{log_odds}_{g,w} 
 = 
 \ln\!\Bigl(\frac{\hat{p}_{g,w}}{1 - \hat{p}_{g,w}} \Bigr),
 $$
@@ -473,9 +586,9 @@ and then compute the difference:
 $$
 \Delta_w 
 = 
-\text{log\_odds}_{1,w} 
+\text{log_odds}_{1,w} 
 \;-\; 
-\text{log\_odds}_{2,w}.
+\text{log_odds}_{2,w}.
 $$
 
 ### 3. Approximate Variance and *z*‐score
