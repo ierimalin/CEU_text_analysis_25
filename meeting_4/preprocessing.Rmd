@@ -20,7 +20,7 @@ library(ggrepel)
 
 ```{r}
 getwd()
-setwd("~/Desktop/teaching/CEU_text_analysis_25/meeting_3/") # this is an example, paste your path here
+setwd("~/Desktop/teaching/CEU_text_analysis_25/meeting_4/") # this is an example, paste your path here
 ```
 
 
@@ -224,6 +224,36 @@ most_frequent_df_stemmed %>%
 
 ```
 
+
+# Bigrams
+
+```{r}
+# A simple base R function for extracting n-grams from a single string.
+ngrams <- function(text, n = 2) {
+  # 1) Split the text into tokens (splitting by whitespace here)
+  tokens <- unlist(strsplit(text, "\\s+"))
+  
+  # If there aren't enough tokens, return an empty vector
+  if (length(tokens) < n) return(character(0))
+  
+  # 2) Create a character vector for the n-grams
+  out <- character(length(tokens) - n + 1)
+  
+  # 3) For each position, paste together 'n' consecutive tokens
+  for (i in seq_along(out)) {
+    out[i] <- paste(tokens[i:(i+n-1)], collapse = " ")
+  }
+  
+  # Return the resulting n-grams
+  return(out)
+}
+
+# Example usage:
+example_text <- "Hello this is a short example sentence for demonstration"
+ngrams(example_text, n = 2)
+ngrams(example_text, n = 3)
+
+```
 
 # Bigrams (Tidytext Implementation)
 
@@ -711,5 +741,108 @@ res_fightin %>%
   ggtitle(paste("Dirichlet prior =", alpha_val)) +
   theme_tufte() +
   theme(legend.position = "right")
+
+```
+
+# Text complexity
+
+```{r}
+
+
+my_ttr <- function(text) {
+  tokens <- unlist(strsplit(text, "\\s+"))
+  types <- length(unique(tokens))
+  ttr <- types / length(tokens)
+  return(ttr)
+}
+
+# Example usage on each row of `clean_federalist`
+clean_federalist %>%
+  mutate(TTR = sapply(text, my_ttr)) %>%
+  group_by(author) %>%
+  summarize(mean_TTR = mean(TTR), sd_TTR = sd(TTR))
+
+```
+
+
+# Semantic Networks
+
+Modified example from the [Tidytext book](https://www.tidytextmining.com/).
+
+
+```{r, message=FALSE, results='hide'}
+
+
+
+# install.packages("igraph")
+# install.packages("ggraph")
+
+require(igraph)
+require(ggraph)
+
+```
+
+```{r}
+
+federalist_bigrams <- clean_federalist %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  count(bigram, sort = TRUE)
+
+
+
+# remove stopwords
+
+
+groupped_bigrams <- clean_federalist %>%
+  group_by(author) %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  count(bigram, sort = TRUE)
+
+bigrams_separeted <- groupped_bigrams %>%
+  separate(bigram, into = c("word1", "word2"), sep = " ")
+
+
+bigrams_separeted_filtered <- bigrams_separeted %>%
+  filter(!word1 %in% stop_words$word,
+         !word2 %in% stop_words$word)
+
+
+bigram_graph_ham <- bigrams_separeted_filtered %>%
+  filter(author == "HAMILTON") %>%
+  ungroup() %>%
+  select(-author) %>%
+  filter(n > 10) %>%
+  graph_from_data_frame()
+
+bigram_graph_mad <- bigrams_separeted_filtered %>%
+  filter(author == "MADISON") %>%
+  ungroup() %>%
+  select(-author) %>%
+  filter(n > 5) %>%
+  graph_from_data_frame()
+
+
+
+a <- grid::arrow(type = "closed", length = unit(.3, "cm"))
+
+ham_graph <- ggraph(bigram_graph_ham, layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n), show.legend = FALSE,
+                 arrow = a, end_cap = circle(.2, 'cm')) +
+  geom_node_point(color = "indianred", size = 5) +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1) +
+  theme_void()
+
+mad_graph <- ggraph(bigram_graph_mad, layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n), show.legend = FALSE,
+                 arrow = a, end_cap = circle(.2, 'cm')) +
+  geom_node_point(color = "steelblue", size = 5) +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1) +
+  theme_void()
+
+# install.packages("cowplot")
+library(cowplot)
+
+plot_grid(ham_graph, mad_graph, ncol = 2)
+
 
 ```
