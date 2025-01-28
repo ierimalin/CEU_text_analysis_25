@@ -19,8 +19,11 @@ library(ggrepel)
 # Stop words and other preprocessing effects
 
 ```{r}
+
 getwd()
-setwd("~/Desktop/teaching/CEU_text_analysis_25/meeting_4/") # this is an example, paste your path here
+setwd("~/Desktop/teaching/CEU_text_analysis_25/meeting_4/")
+
+# this is an example, paste your path here
 ```
 
 
@@ -56,6 +59,7 @@ clean_federalist <- federalist %>%
 What are the most used words in the federalist papers?
 
 ```{r}
+
 dtm_federalist <- DocumentTermMatrix(clean_federalist$text,
                                      control = list(removePunctuation = TRUE,
                                          stopwords = FALSE))
@@ -134,12 +138,19 @@ most_frequent_df <- most_frequent %>% as.list() %>% as_tibble() %>%
   pivot_longer(everything())
 
 most_frequent_df %>% arrange(desc(value))
+
+
+# select only the words that start with an "a"
+
+most_frequent_df %>% filter(str_detect(name, "^ani")) %>% arrange(desc(value)) %>%
+  print(n = 100)
+
 ```
 Already looking a little better!
 
 ```{r}
 most_frequent_df %>%
-  mutate(label = ifelse(value > 500, name, NA)) %>%
+  mutate(label = ifelse(value > 300, name, NA)) %>%
   ggplot() +
   geom_point(aes(reorder(name, -value),  value)) +
   geom_text_repel(aes(reorder(name, -value),  value, label = label),
@@ -150,8 +161,14 @@ most_frequent_df %>%
     axis.text.x = element_blank(),
     axis.title.x = element_blank(),
     axis.ticks = element_blank()
-
   )
+
+
+most_frequent_df %>%
+  arrange(desc(value)) %>%
+  print(n = 100)
+
+
 
 ```
 
@@ -168,12 +185,14 @@ most_frequent_df %>%
   scale_x_log10() +
   scale_y_log10() +
   theme_tufte()
+
 ```
 
 
 # What about stemming?
 
 ```{r}
+# install.packages("SnowballC")
 library(SnowballC)
 
 # Example: Apply stemming via the 'stemDocument' function in a corpus/dtm workflow
@@ -189,8 +208,10 @@ dtm_stemmed <- DocumentTermMatrix(stemmed_corpus,
 dtm_stemmed <- as.matrix(dtm_stemmed)
 
 
-dim(dtm_stemmed)
 dim(dtm_federalist)
+
+
+dim(dtm_stemmed)
 
 
 dtm_stemmed <- dtm_stemmed %>% as.matrix()
@@ -203,7 +224,8 @@ most_frequent_stemmed <- dtm_stemmed %>% colSums()
 most_frequent_df_stemmed <- most_frequent_stemmed %>% as.list() %>% as_tibble() %>%
   pivot_longer(everything())
 
-most_frequent_df_stemmed %>% arrange(desc(value))
+most_frequent_df_stemmed %>% arrange(desc(value)) %>%
+  print(n = 100)
 
 
 
@@ -261,9 +283,12 @@ For more information on the Tidytext approach, please refer to the [Tidytext boo
 
 ```{r}
 
-
+# install.packages("tidytext")
 library(tidytext)
 
+
+test_df <- clean_federalist %>%
+  unnest_tokens(unigrams, text, token = "ngrams", n = 30)
 
 federalist_bigrams <- clean_federalist %>%
   unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
@@ -338,7 +363,7 @@ most_frequent <- dtm_federalist_tfidf %>% colSums()
 most_frequent_df <- most_frequent %>% as.list() %>% as_tibble() %>%
   pivot_longer(everything())
 
-most_frequent_df %>% arrange(desc(value))
+most_frequent_df %>% arrange(desc(value)) %>% print(n = 50)
 ```
 
 Not bad... Let's plot this:
@@ -502,32 +527,12 @@ $$
 log\frac{O^i_w}{O^j_w} = log\frac{f^i_w}{1 - f^i_w}/\frac{f^j_w}{1 - f^j_w} = log\frac{f^i_w}{1 - f^i_w} - log\frac{f^j_w}{1 - f^j_w}
 $$
 ```{r}
-log_odds_ratio <- log_odds_ham - log_odds_mad
-
-
-log_odds_ratio <- log_odds_ratio %>%
-  as.list() %>%
-  as_tibble() %>%
-  pivot_longer(everything())
-
-### Add word frequency ###
-
-general_frequency <- dtm_federalist %>% as.matrix() %>% colSums() %>%
-  as.list() %>%
-  as_tibble() %>%
-  pivot_longer(everything()) %>%
-  mutate(freq = value) %>%
-  select(-value)
-
-log_odds_ratio <- log_odds_ratio %>%
-  left_join(general_frequency)
-
 
 log_odds_ratio %>%
-  mutate(label = ifelse(value > 2 | value < -2, name, NA)) %>%
+  mutate(label = ifelse(log_odds_diff > 2 | log_odds_diff < -2, word, NA)) %>%
   ggplot() +
-  geom_point(aes(freq, value, color = value)) +
-  geom_text_repel(aes(freq, value, label = label),
+  geom_point(aes(freq, log_odds_diff, color = log_odds_diff)) +
+  geom_text_repel(aes(freq, log_odds_diff, label = label),
                   max.overlaps = 50) +
   ylab("log odds ratio") +
   theme_tufte() +
@@ -535,10 +540,10 @@ log_odds_ratio %>%
 
 
 log_odds_ratio %>%
-  mutate(label = ifelse(value > 2 | value < -2, name, NA)) %>%
+  mutate(label = ifelse(log_odds_diff > 2 | log_odds_diff < -2, word, NA)) %>%
   ggplot() +
-  geom_point(aes(freq, value, color = value)) +
-  geom_text_repel(aes(freq, value, label = label),
+  geom_point(aes(freq, log_odds_diff, color = log_odds_diff)) +
+  geom_text_repel(aes(freq, log_odds_diff, label = label),
                   max.overlaps = 50) +
   ylab("log odds ratio") +
   scale_x_log10() +  # often helpful to log-scale the frequency axis
@@ -546,10 +551,11 @@ log_odds_ratio %>%
   theme(legend.position = "none")
 
 
+
 hamilton_plot <- log_odds_ratio %>%
-  top_n(20, value) %>%
+  top_n(20, log_odds_diff) %>%
   ggplot() +
-  geom_bar(aes(reorder(name, value), value),
+  geom_bar(aes(reorder(word, log_odds_diff), log_odds_diff),
            stat = "identity",
            fill = "steelblue") +
   coord_flip() +
@@ -558,9 +564,9 @@ hamilton_plot <- log_odds_ratio %>%
   theme(axis.title.y = element_blank())
 
 madison_plot <- log_odds_ratio %>%
-  top_n(20, -value) %>%
+  top_n(20, -log_odds_diff) %>%
   ggplot() +
-  geom_bar(aes(reorder(name, -value), value),
+  geom_bar(aes(reorder(word, -log_odds_diff), log_odds_diff),
            stat = "identity",
            fill = "indianred4") +
   coord_flip() +
