@@ -367,7 +367,7 @@ similarity_matrix
 We don't have tons of data, so everything is very similar to everything else. But, it still provides evidence to the hypothesis, that the `Disputed` paper was written by `Madison`. Note that the highest similarity is with `Jay`, but 1) it was never hypothesized, and 2) the vector for `Jay` is very sparse, so difficult to make any meaningful measurements. 
 
 
-Once again, for ***NO ADDITIONAL POINTS*** calculate the similarity between `Madison`, `Hamilton` and all other disputed papers (one by one). We can check which ones are disputed:
+Calculate the similarity between `Madison`, `Hamilton` and all other disputed papers (one by one). We can check which ones are disputed:
 
 ```{r}
 clean_federalist %>%

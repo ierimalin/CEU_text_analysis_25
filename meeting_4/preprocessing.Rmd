@@ -145,6 +145,12 @@ most_frequent_df %>% arrange(desc(value))
 most_frequent_df %>% filter(str_detect(name, "^ani")) %>% arrange(desc(value)) %>%
   print(n = 100)
 
+most_frequent_df %>%
+  mutate(stem = stemDocument(name)) %>%
+  filter(str_detect(stem, "^ani")) %>%
+  print(n = nrow(.))
+
+
 ```
 Already looking a little better!
 
@@ -197,12 +203,16 @@ library(SnowballC)
 
 # Example: Apply stemming via the 'stemDocument' function in a corpus/dtm workflow
 
-stemmed_corpus <- VCorpus(VectorSource(clean_federalist$text)) %>%
-  tm_map(stemDocument)
+# This does not work properly (the "ani" words are not stemmed properly):
+# stemmed_corpus <- VCorpus(VectorSource(clean_federalist$text)) %>%
+#   tm_map(stemDocument)
 
-dtm_stemmed <- DocumentTermMatrix(stemmed_corpus,
+
+# This works (add stemming=TRUE to the control list):
+dtm_stemmed <- DocumentTermMatrix(clean_federalist$text,
   control = list(stopwords = TRUE,
-                 removePunctuation = TRUE)
+                 removePunctuation = TRUE,
+                 stemming = TRUE)
 )
 
 dtm_stemmed <- as.matrix(dtm_stemmed)
@@ -224,9 +234,7 @@ most_frequent_stemmed <- dtm_stemmed %>% colSums()
 most_frequent_df_stemmed <- most_frequent_stemmed %>% as.list() %>% as_tibble() %>%
   pivot_longer(everything())
 
-most_frequent_df_stemmed %>% arrange(desc(value)) %>%
-  print(n = 100)
-
+most_frequent_df_stemmed %>% arrange(desc(value))
 
 
 most_frequent_df_stemmed %>%
