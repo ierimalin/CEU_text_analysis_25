@@ -1,6 +1,6 @@
 ---
 title: "Homework 1 (Deadline: 11/02/2024)"
-author: "Your Name Here"
+author: "Alin Ierima"
 output: html_document
 ---
 
@@ -12,12 +12,13 @@ knitr::opts_chunk$set(echo = TRUE,
 
 ## Setup
 
-You are free to use any function/package you want (from base R or any package) to complete this assignment. Additionally, people working in Python are free to submit their work in a juptyer notebook. 
+You are free to use any function/package you want (from base R or any package) to complete this assignment. Additionally, people working in Python are free to submit their work in a juptyer notebook.
 
 For people doing it in R, please write your code in the appropriate code chunks below. You can submit a *knitted* file (html or pdf), or an `.Rmd` file. For more information on how to knit a file, please refer to the [R Markdown documentation](https://rmarkdown.rstudio.com/lesson-1.html).
 
 ```{r}
 require(tidyverse)
+library(tidytext)
 
 # Load the data
 federalist <- read_csv("data/federalist.csv")
@@ -27,48 +28,144 @@ federalist <- read_csv("data/federalist.csv")
 
 <ol>
 
-<li>Identify Disputed Papers
+<li>
+
+Identify Disputed Papers
 
 Look at the `author` column to find rows labeled "HAMILTON OR MADISON"
 
-<li> Author Frequencies
+<li>
+
+Author Frequencies
 
 Pick a set of words (e.g., the three words that we used: “man,” “by,” “upon”) + 5 other words that you think are good predictors of authorship.
 
 For each author (Hamilton, Madison, and Jay), compute their **word probabilities** (the ralitive rates) $\hat{\mu}_h, \hat{\mu}_m, \hat{\mu}_j$ (with Laplace+1 smoothing).
 
-<li> For Each Disputed Document
+<li>
+
+For Each Disputed Document
 
 Compute the multinomial likelihood of that document under each author’s distribution, for example, using `dmultinom(...)` function.
 
 Which author has the largest likelihood?
 
-<li> Either plot the results or create a table that shows the likelihood of each author for each disputed document.
+<li>
+
+Either plot the results or create a table that shows the likelihood of each author for each disputed document.
 
 </ol>
 
 ```{r}
+library(tm)
+library(tidyverse)
+library(ggthemes)
+library(ggrepel)
 
-# Your code here
+# 0. Preprocessing - I adapted this from your code
+preprocess <- function(text) {
+  text |>
+    mutate(
+    text   = str_to_lower(text),                # turn all letters to lowercase
+    text   = str_replace_all(text, "\n", " "),  # replace '/n' carriage return symbols
+    text   = str_remove_all(text, "[:punct:]"), # remove all punctuation
+    man    = str_count(text, "\\Wman "),        # Basic regex (more about it later in the course. '\\W' part means at the begging of the word) and count those up
+    by     = str_count(text, "\\Wby "),         # same
+    upon   = str_count(text, "\\Wupon "),
+    through   = str_count(text, "\\Wthrough "),
+    cannot   = str_count(text, "\\Wcannot "),
+    people   = str_count(text, "\\Wpeople "),
+    president   = str_count(text, "\\Wpresident "),
+    state   = str_count(text, "\\Wstate ")) |>
+    rowwise() |>
+    mutate(
+      length = length(str_split(text, "")[[1]])
+    )
+}
+
+federalist_clean = tibble(federalist)
+federalist_clean <- preprocess(federalist_clean)
+
+# 1.2. Identify disputed papers, author frequencies, word frequencies
+federalist_disputed_docs <- federalist_clean[federalist$author == "HAMILTON OR MADISON",] |>
+  select(man,by,upon, through, cannot, people, president, state) |>
+  mutate(across(everything(), as.numeric))
+federalist_disputed_docs_df <- as.data.frame(federalist_disputed_docs)
+
+federalist_hamilton <-federalist_clean[federalist$author =="HAMILTON",] |>
+  select(man,by,upon, through, cannot, people, president, state) |>
+  colSums()
+federalist_madison <- federalist_clean[federalist$author =="MADISON",] |>
+  select(man,by,upon, through, cannot, people, president, state) |>
+  colSums()
+federalist_jay <- federalist_clean[federalist$author =="JAY",] |>
+  select(man,by,upon, through, cannot, people, president, state) |>
+  colSums()
+
+federalist_disputed_prob <- (federalist_disputed_docs +1) / (sum(federalist_disputed_docs) +1)
+federalist_hamilton_prob <- (federalist_hamilton +1) / (sum(federalist_hamilton) +1)
+federalist_madison_prob <- (federalist_madison +1) / (sum(federalist_madison) +1)
+federalist_jay_prob <- (federalist_jay +1) / (sum(federalist_jay) +1)
+
+
+# 3. Multinomial likelihood for disputed docs
+
+calculate_likelihoods <- function(document, hamilton_prob, madison_prob, jay_prob) {
+  hamilton_likelihood = dmultinom(document, prob = hamilton_prob)
+  madison_likelihood = dmultinom(document, prob = madison_prob)
+  jay_likelihood = dmultinom(document, prob = jay_prob)
+    return(c(Hamilton = hamilton_likelihood, Madison = madison_likelihood, Jay = jay_likelihood))
+}
+
+
+likelihoods_list <- apply(federalist_disputed_docs_df, 1, function(document) {
+  calculate_likelihoods(document, federalist_hamilton_prob, federalist_madison_prob, federalist_jay_prob)})
+
+likelihoods_table <- as_tibble(t(likelihoods_list))
+likelihoods_table <- likelihoods_table |> 
+  mutate(
+    Doc = row_number(), 
+    Likely_Author = ifelse(Hamilton == pmax(Hamilton, Madison, Jay), "Hamilton",
+                           ifelse(Madison == pmax(Hamilton, Madison, Jay), "Madison", "Jay"))
+  )
+
+knitr::kable(likelihoods_table)
+
+
+
+
 
 ```
+
+\
 
 ## Task 2 Logged Odds Differences for Bigrams
 
 <ol>
 
-<li> Tokenize text into bigrams.
+<li>
 
-<li> Either remove every bigram that contains a stopword, or remove stopwords before tokenizing into bigrams.
+Tokenize text into bigrams.
 
-<li> Remove the bigrams that occur only once.
+<li>
 
-<li> Separate the bigrams by author (focus only Hamilton and Madison).
+Either remove every bigram that contains a stopword, or remove stopwords before tokenizing into bigrams.
 
-<li> Compute the relative frequencies of bigrams for each author.
+<li>
 
-<li> Compute the log odds for each bigram.
+Remove the bigrams that occur only once.
 
+<li>
+
+Separate the bigrams by author (focus only Hamilton and Madison).
+
+<li>
+
+Compute the relative frequencies of bigrams for each author.
+
+<li>
+
+Compute the log odds for each bigram.
 
 $$
 \log O_b^i = \log(\frac{f_b^i}{1 - f_b^i})
@@ -76,7 +173,9 @@ $$
 
 where $f_b^i$ is the relative frequency of bigram $b$ in author $i$.
 
-<li> Compute the log odds differences for each bigram.
+<li>
+
+Compute the log odds differences for each bigram.
 
 $$
 \Delta_{bigram} = \log(\frac{f_b^i}{1 - f_b^i}) - \log(\frac{f_b^j}{1 - f_b^j})
@@ -84,13 +183,72 @@ $$
 
 where $i$ and $j$ are the authors being compared.
 
-<li> Plot the log odds differences of top discriminative bigrams.
+<li>
+
+Plot the log odds differences of top discriminative bigrams.
 
 </ol>
 
 ```{r}
 
-# Your code here
+#1.2.3. Tokenizing into bigrams, removing stop words, Removing bigrams occuring once. 
+data(stop_words)
+
+federalist_clean_nostop <- federalist_clean |>
+  mutate(
+    text = removeWords(text, stop_words$word))
+
+federalist_bigrams <- federalist_clean_nostop |>
+  unnest_tokens(bigram, text, token="ngrams",n=2) |>
+  count(bigram, sort = T) |> 
+  filter(n>1)
+
+
+#4. Separate bigrams by Hamilton/Madison
+
+bigrams_by_author <- federalist_clean |>
+  filter(author %in% c("HAMILTON", "MADISON")) |>
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) |>
+  separate(bigram, into = c("word1","word2"), sep = " ") |>
+  filter(!word1 %in% stop_words$word, !word2 %in% stop_words$word) |>
+  unite(bigram, word1, word2, sep = " ") |>
+  count(author, bigram, sort = T) |>
+  filter (n>1)
+#5. Relative frequencies of bigrams for each author
+
+bigrams_rel <- bigrams_by_author |>
+  group_by(author) |>
+  mutate(total = sum(n),
+         frequency = n / total)
+
+#6. Log odds for each bigram
+
+bigrams_log_odds <- bigrams_rel |>
+  mutate(log_odds = log(frequency / (1 - frequency)))
+
+
+#7. Log odds differences for each bigram
+
+bigrams_diff <- bigrams_log_odds |>
+  select(author, bigram, log_odds) |>
+  pivot_wider(names_from = author, values_from = log_odds) |>
+  filter(!is.na(HAMILTON), !is.na(MADISON)) |>  # keep only bigrams present in both
+  mutate(log_odds_diff = HAMILTON - MADISON)
+
+#8. Plotting the log odds differences of top discriminative bigrams
+
+top_diff <- bigrams_diff |>
+  arrange(desc(abs(log_odds_diff))) |>
+  slice(1:20)
+
+ggplot(top_diff, aes(x = reorder(bigram, log_odds_diff), y = log_odds_diff)) +
+  geom_col(fill = "blue") +
+  coord_flip() +
+  labs(x = "Bigram",
+       y = "Log Odds Difference (minus - Hamilton, plus - Madison)",
+       title = "Top 20 Discriminative Bigrams ") +
+  theme_minimal()
+
+
 
 ```
-
