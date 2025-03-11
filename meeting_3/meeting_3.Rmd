@@ -48,10 +48,6 @@ library(ggrepel)
 
 Check if your working directory is the correct one:
 
-```{r}
-getwd()
-setwd("~/Desktop/Teaching/CEU_text_analysis_25/meeting_3/") # this is an example, paste your path here
-```
 
 
 Ok, now read in the file `federalist.csv` and inspect:
